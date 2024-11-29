@@ -1,0 +1,125 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local StarterGui = game:GetService("StarterGui")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+local Mouse = LocalPlayer:GetMouse()
+
+-- Camlock Variables
+local CamlockEnabled = false
+local TargetPlayer = nil
+local CurrentHitPart = "HumanoidRootPart"
+
+local PredictionLevels = {
+    {value = Vector3.new(0.02, 0.01, 0.02), name = "Low"},
+    {value = Vector3.new(0.04, 0.02, 0.04), name = "Medium"},
+    {value = Vector3.new(0.06, 0.03, 0.06), name = "High"}
+}
+local CurrentPredictionIndex = 2
+local Prediction = PredictionLevels[CurrentPredictionIndex].value
+
+-- Speed Boost Variables
+local SpeedEnabled = false
+local SpeedMultiplier = 50 -- Speed boost in studs per second
+
+-- Notification Function
+local function Notify(title, message)
+    StarterGui:SetCore("SendNotification", {
+        Title = title,
+        Text = message,
+        Duration = 2
+    })
+end
+
+-- Get Target Player from Mouse Hover
+local function GetTargetPlayerFromMouse()
+    local targetPlayer = nil
+    local mouseHit = Mouse.Hit
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local humanoidRootPartPosition = player.Character.HumanoidRootPart.Position
+            if (mouseHit.p - humanoidRootPartPosition).Magnitude < 5 then -- Adjust the distance as needed
+                targetPlayer = player
+                break
+            end
+        end
+    end
+
+    return targetPlayer
+end
+
+-- Change Prediction Function for Camlock
+local function ChangePrediction()
+    CurrentPredictionIndex = (CurrentPredictionIndex % #PredictionLevels) + 1
+    Prediction = PredictionLevels[CurrentPredictionIndex].value
+    Notify("Camlock", "Prediction changed to " .. PredictionLevels[CurrentPredictionIndex].name)
+end
+
+-- Input Handling for Camlock and Speed Boost
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if not gameProcessed then
+        -- Toggle Camlock with 'E'
+        if input.KeyCode == Enum.KeyCode.E then
+            CamlockEnabled = not CamlockEnabled
+            if CamlockEnabled then
+                TargetPlayer = GetTargetPlayerFromMouse()
+                if TargetPlayer then
+                    Notify("Camlock", "Enabled on " .. TargetPlayer.Name)
+                else
+                    Notify("Camlock", "No player under mouse.")
+                end
+            else
+                TargetPlayer = nil
+                Notify("Camlock", "Disabled")
+            end
+        
+        -- Change Prediction with 'T'
+        elseif input.KeyCode == Enum.KeyCode.T and CamlockEnabled then
+            ChangePrediction()
+
+        -- Toggle Speed Boost with 'X'
+        elseif input.KeyCode == Enum.KeyCode.X then
+            SpeedEnabled = not SpeedEnabled
+            if SpeedEnabled then
+                Notify("Speed Boost", "Enabled")
+            else
+                Notify("Speed Boost", "Disabled")
+            end
+        end
+    end
+end)
+
+-- Render Stepped for Camlock Functionality 
+RunService.RenderStepped:Connect(function()
+    if CamlockEnabled and TargetPlayer and TargetPlayer.Character then
+        local targetPart = TargetPlayer.Character:FindFirstChild(CurrentHitPart)
+        if targetPart then
+            local targetPosition = targetPart.Position + targetPart.Velocity * Prediction
+            workspace.CurrentCamera.CFrame = CFrame.new(workspace.CurrentCamera.CFrame.Position, targetPosition)
+        end
+    end
+end)
+
+-- Heartbeat for Speed Boost Functionality 
+RunService.Heartbeat:Connect(function(delta)
+    if SpeedEnabled and Character and Humanoid.MoveDirection.Magnitude > 0 then
+        local moveDirection = Humanoid.MoveDirection.Unit
+        local newCFrame = HumanoidRootPart.CFrame + (moveDirection * SpeedMultiplier * delta)
+        HumanoidRootPart.CFrame = newCFrame
+    end
+end)
+
+-- Character Added Event Handling 
+LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+    Character = newCharacter
+    Humanoid = Character:WaitForChild("Humanoid")
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+end)
+
+-- Injection Confirmation Message 
+Notify("Injection", "Injected successfully, enjoy cutie!")
